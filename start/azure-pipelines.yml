@@ -1,0 +1,38 @@
+jobs: 
+- job: HostedAgent
+  pool:
+    vmImage: 'windows-latest' #서버 2022
+  steps:
+  - task: TerraformInstaller@0
+    inputs: 
+      terraformVersion: latest
+    displayName: Install Terraform   
+  - script: |
+      echo "TESTIMG: $(TESTIMG)"
+      echo "ISSUE: $(ISSUE)"
+      echo "ASSIGNEE: $(ASSIGNEE)"
+      echo "REVISION: $(REVISION)"
+    displayName: 'Test Output Parameters'
+  - script: |
+      echo "##vso[task.setvariable variable=TESTIMG]$(TESTIMG)"
+      echo "##vso[task.setvariable variable=ISSUE]$(ISSUE)"
+      echo "##vso[task.setvariable variable=ASSIGNEE]$(ASSIGNEE)"
+      echo "##vso[task.setvariable variable=REVISION]$(REVISION)"
+    displayName: 'Set Variables'
+  - powershell: |
+      echo "TESTIMG: $env:TESTIMG"
+      echo "ISSUE: $env:ISSUE"
+      echo "ASSIGNEE: $env:ASSIGNEE"
+      echo "REVISION: $env:REVISION"
+    displayName: 'Test Output Variables'
+  - powershell: |
+      $psexecUrl = 'https://download.sysinternals.com/files/PSTools.zip'
+      $downloadPath = Join-Path $env:USERPROFILE 'Downloads\PSTools.zip'
+      Invoke-WebRequest -Uri $psexecUrl -OutFile $downloadPath
+      Expand-Archive -Path $downloadPath -DestinationPath $env:USERPROFILE\Downloads\PSTools
+      $psexecPath = Join-Path $env:USERPROFILE\Downloads\PSTools 'PsExec.exe'
+      Copy-Item -Path $psexecPath -Destination 'C:\Windows\System32\PsExec.exe'
+      [System.Environment]::SetEnvironmentVariable('Path', [System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::Machine) + ";$psexecPath", [System.EnvironmentVariableTarget]::Machine)
+    displayName: 'Download and Install PsExec'
+  - template: azure-vm-start.yml
+

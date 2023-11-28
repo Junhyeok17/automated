@@ -1,0 +1,61 @@
+jobs: 
+- job: HostedAgent
+  pool:
+    vmImage: 'windows-latest'
+  steps:
+  - task: TerraformInstaller@0
+    inputs: 
+      terraformVersion: latest
+    displayName: Install Terraform
+  - script: |
+      az login --service-principal -u 0cd2a780-3598-4328-8db8-8b7ba273e024 -p 7wj8Q~ZoQE19B3yHSRlA9XoXzu63nIHjCWuI8a1Z --tenant c86959ed-45e5-47f5-8ef5-308ca79916fc
+      cd $(Agent.BuildDirectory)
+    displayName: 'Azure Login'
+
+  - powershell: |
+      echo "Agent: $env:Agent"
+      echo "dkns: $env:dkns"
+      
+      $Agent = $env:Agent -replace '"', ''
+      $dkns = $env:dkns -replace '"', ''
+
+
+      $AgentNumber = [int]($Agent -split "Agent")[1]
+      $dknsNumber = [int]($dkns -split "dkns")[1]
+
+      # Agent VM 삭제
+      echo "추가 생성 된 $Agent 테스트 종료되어 삭제 진행"
+      az vm delete --resource-group Automated_Test --name $Agent --yes
+      # dkns VM 삭제
+      echo "추가 생성 된 $dkns 테스트 종료되어 삭제 진행"
+      az vm delete --resource-group Automated_Test --name $dkns --yes
+      
+      # Agent VM에 할당되었던 디스크 삭제
+      $Agent_diskList = az disk list --resource-group AUTOMATED_TEST --query "[?starts_with(name, '$Agent')]" | Out-String | ConvertFrom-Json
+      $Agent_diskName = $Agent_diskList | Where-Object { $_.name -match "$Agent" } | Select-Object -ExpandProperty name
+      echo "가상머신에 할당되었던 $Agent_diskName 디스크 삭제 진행"
+      az disk delete --name $Agent_diskName --resource-group AUTOMATED_TEST --yes
+
+      # dkns VM에 할당되었던 디스크 삭제
+      $dkns_diskList = az disk list --resource-group AUTOMATED_TEST --query "[?starts_with(name, '$dkns')]" | Out-String | ConvertFrom-Json
+      $dkns_diskName = $dkns_diskList | Where-Object { $_.name -match "$dkns" } | Select-Object -ExpandProperty name
+      echo "가상머신에 할당되었던 $dkns_diskName 디스크 삭제 진행"
+      az disk delete --name $dkns_diskName --resource-group AUTOMATED_TEST --yes
+
+      # Agent VM에 할당되었던 네트워크 인터페이스 삭제
+      echo "가상머신에 할당되었던 $Agent VMNIC 삭제"
+      az network nic delete --resource-group Automated_Test --name $Agent"VMNic"
+
+      # dkns VM에 할당되었던 네트워크 인터페이스 삭제
+      echo "가상머신에 할당되었던 $dkns VMNIC 삭제"
+      az network nic delete --resource-group Automated_Test --name $dkns"VMNic"
+      
+      # Agent VM과 dkns VM에 항당되었던 서브넷 삭제
+      echo "가상머신에 할당되었던 서브넷 삭제"
+      az network vnet subnet delete --resource-group Automated_Test --vnet-name DtlAutomated_Test --name subnet-00$AgentNumber
+
+      # dkns의 경우 자동으로 동적 공인 IP 생성되기 때문에 해당 공인 IP 삭제
+      echo "dkns VM에 자동 생성되어 할당 되었던 공인 IP $dkns PublicIP 삭제"
+      az network public-ip delete --name $dkns"PublicIP" --resource-group Automated_Test
+
+    displayName: 'Azure Delete VM/DKNS'

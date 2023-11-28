@@ -1,0 +1,9 @@
+jobs:
+- job: StopAgent
+  displayName: 'Stop Agent'
+  pool:
+    name: default
+  steps:
+  - powershell: |
+      Stop-Service -Name "AzureAgent99" -ErrorAction SilentlyContinue
+    displayName: 'Stop Agent99'
